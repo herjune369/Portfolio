@@ -233,8 +233,9 @@ resource "aws_db_instance" "flask_db" {
 # SSH 키 페어
 resource "aws_key_pair" "app_key" {
   key_name_prefix = "saju-app-key-"
-  public_key      = file("~/.ssh/saju_app_key.pub")
+  public_key      = var.public_key
 }
+
 
 # EC2 인스턴스 설정
 resource "aws_instance" "web1" {
