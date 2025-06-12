@@ -1,6 +1,5 @@
 provider "aws" {
   region = "ap-northeast-2"
-  profile = "default"
 }
 
 # 기존 VPC 사용
