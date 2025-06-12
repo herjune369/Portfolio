@@ -1,0 +1,42 @@
+name: Terraform Destroy
+
+on:
+  workflow_dispatch:  # 👉 "수동 실행 버튼" 생김
+
+jobs:
+  destroy:
+    name: Terraform Destroy Job
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./terraform  # 👉 여기에 main.tf 있는 디렉토리
+
+    steps:
+    - name: ✅ 코드 체크아웃
+      uses: actions/checkout@v3
+
+    - name: ✅ Install Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: 1.5.0
+
+
+    - name: ✅ AWS 자격증명 설정
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-northeast-2  # 리전은 네 자원에 맞게 변경
+
+    - name: ✅ Terraform Init
+      run: terraform init
+
+    - name: ☠️ Terraform Destroy
+      run: |
+        terraform destroy -auto-approve \
+          -var="vpc_id=${{ secrets.VPC_ID }}" \
+          -var="db_password=${{ secrets.DB_PASSWORD }}" \
+          -var="ami_id=${{ secrets.AMI_ID }}" \
+          -var="subnet_ids=[]" \
+          -var="public_key=${{ secrets.TF_PUBLIC_KEY }}"

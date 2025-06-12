@@ -1,0 +1,5 @@
+ami_id      = "ami-0bb60994bcb22cc2c"
+vpc_id      = "vpc-044f58aebf94f371d"   # 형이 사용하는 실제 VPC ID로
+subnet_ids  = ["subnet-1234abcd", "subnet-5678efgh"]
+db_password = "yourstrongpassword"
+

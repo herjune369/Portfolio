@@ -1,0 +1,17 @@
+# Terraform local state files
+*.tfstate
+*.tfstate.backup
+
+# Terraform provider plugin dir
+.terraform/
+
+# Crash log
+crash.log
+
+# SSH keys (just in case)
+*.pem
+*.key
+
+# OS & editor files
+.DS_Store
+*.swp
