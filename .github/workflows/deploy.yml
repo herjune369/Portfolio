@@ -37,7 +37,6 @@ jobs:
           -backend-config="bucket=${{ secrets.TF_BUCKET }}" \
           -backend-config="key=ai-saju-app/terraform.tfstate" \
           -backend-config="region=${{ env.AWS_REGION }}" \
-          -backend-config="bucket=${{ secrets.TF_BUCKET }}" \
           -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
 
     - name: Terraform Apply or Destroy
@@ -78,3 +77,10 @@ jobs:
         chmod 600 ~/.ssh/my-key.pem
         eval "$(ssh-agent -s)"
         ssh-add ~/.ssh/my-key.pem
+
+    - name: Show Terraform Outputs
+      if: github.ref == 'refs/heads/main'
+      run: |
+        cd terraform
+        terraform output
+
