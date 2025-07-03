@@ -8,12 +8,9 @@
 *.retry
 ansible/terraform_outputs.json
 
-# Security scan results
+# Security scan results (Trivy only)
 *.sarif
-security-report.md
-safety-report.json
-bandit-report.json
-checkov-results.sarif
+trivy-security-report.md
 trivy-*.sarif
 
 # OS

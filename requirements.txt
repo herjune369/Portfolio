@@ -1,0 +1,13 @@
+# Trivy Security Report Generator Dependencies
+# Python 3.7+ required
+
+# Core dependencies for the security report generator
+# No external dependencies required - uses only standard library modules:
+# - json
+# - os
+# - sys
+# - datetime
+# - typing
+
+# Optional: For enhanced markdown formatting (if needed in future)
+# markdown>=3.0.0

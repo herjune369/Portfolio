@@ -1,5 +1,0 @@
-[bandit]
-exclude_dirs = ['tests', 'test', 'venv', 'env', '.venv', '.env']
-skips = ['B101', 'B601']
-targets = ['ansible/roles/flask/files/']
-recursive = true 

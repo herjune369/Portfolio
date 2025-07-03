@@ -1,4 +1,4 @@
-name: Security Scan with Trivy
+name: Trivy Security Scan with AI Report
 
 permissions:
   contents: read
@@ -19,21 +19,21 @@ env:
   TF_VERSION: '1.5.0'
 
 jobs:
-  security-scan:
+  trivy-security-scan:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v3
 
-    - name: Run Trivy vulnerability scanner
+    - name: Run Trivy vulnerability scanner (File System)
       uses: aquasecurity/trivy-action@master
       with:
         scan-type: 'fs'
         scan-ref: '.'
         format: 'sarif'
         output: 'trivy-results.sarif'
-        severity: 'CRITICAL,HIGH,MEDIUM'
+        severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
     - name: Upload Trivy scan results to GitHub Security tab
       uses: github/codeql-action/upload-sarif@v3
@@ -41,84 +41,25 @@ jobs:
       with:
         sarif_file: 'trivy-results.sarif'
 
-    - name: Upload Trivy results
+    - name: Upload Trivy FS results
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: trivy-results
+        name: trivy-fs-results
         path: trivy-results.sarif
 
-    - name: Generate Trivy Summary
+    - name: Generate Trivy FS Summary
       if: always()
       run: |
         echo "## 🔍 Trivy File System Scan Results" >> $GITHUB_STEP_SUMMARY
         if [ -f trivy-results.sarif ]; then
-          echo "✅ Scan completed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "✅ File system scan completed successfully" >> $GITHUB_STEP_SUMMARY
           echo "📁 Results uploaded to GitHub Security tab" >> $GITHUB_STEP_SUMMARY
         else
-          echo "❌ Scan failed or no results generated" >> $GITHUB_STEP_SUMMARY
+          echo "❌ File system scan failed or no results generated" >> $GITHUB_STEP_SUMMARY
         fi
 
-  dependency-check:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v3
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install safety bandit
-
-    - name: Run Safety check for Python dependencies
-      run: |
-        safety check --output json > safety-report.json || true
-        safety check --full-report || true
-
-    - name: Upload Safety results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: safety-results
-        path: safety-report.json
-
-    - name: Run Bandit security linter
-      run: |
-        bandit -r ansible/roles/flask/files/ -f json -o bandit-report.json || true
-        bandit -r ansible/roles/flask/files/ -f txt
-
-    - name: Upload Bandit results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: bandit-results
-        path: bandit-report.json
-
-    - name: Generate Dependency Check Summary
-      if: always()
-      run: |
-        echo "## 🐍 Python Security Check Results" >> $GITHUB_STEP_SUMMARY
-        echo "### Safety Check:" >> $GITHUB_STEP_SUMMARY
-        if [ -f safety-report.json ]; then
-          echo "✅ Safety check completed" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "❌ Safety check failed" >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        echo "### Bandit Analysis:" >> $GITHUB_STEP_SUMMARY
-        if [ -f bandit-report.json ]; then
-          echo "✅ Bandit analysis completed" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "❌ Bandit analysis failed" >> $GITHUB_STEP_SUMMARY
-        fi
-
-  terraform-security:
+  trivy-iac-scan:
     runs-on: ubuntu-latest
     
     steps:
@@ -137,7 +78,7 @@ jobs:
         scan-ref: 'terraform/'
         format: 'sarif'
         output: 'trivy-iac-results.sarif'
-        severity: 'CRITICAL,HIGH,MEDIUM'
+        severity: 'CRITICAL,HIGH,MEDIUM,LOW'
 
     - name: Upload Trivy IaC results
       if: always()
@@ -146,53 +87,34 @@ jobs:
         name: trivy-iac-results
         path: trivy-iac-results.sarif
 
-    - name: Run Checkov
-      uses: bridgecrewio/checkov-action@master
-      with:
-        directory: terraform/
-        framework: terraform
-        output_format: sarif
-        output_file_path: checkov-results.sarif
-        soft_fail: true
-
-    - name: Upload Checkov results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: checkov-results
-        path: checkov-results.sarif
-
-    - name: Generate Infrastructure Security Summary
+    - name: Generate Trivy IaC Summary
       if: always()
       run: |
-        echo "## 🏗️ Infrastructure Security Check Results" >> $GITHUB_STEP_SUMMARY
-        echo "### Trivy IaC Scan:" >> $GITHUB_STEP_SUMMARY
+        echo "## 🏗️ Trivy Infrastructure as Code Scan Results" >> $GITHUB_STEP_SUMMARY
         if [ -f trivy-iac-results.sarif ]; then
-          echo "✅ Trivy IaC scan completed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ IaC scan completed successfully" >> $GITHUB_STEP_SUMMARY
         else
-          echo "❌ Trivy IaC scan failed" >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        echo "### Checkov Analysis:" >> $GITHUB_STEP_SUMMARY
-        if [ -f checkov-results.sarif ]; then
-          echo "✅ Checkov analysis completed" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "❌ Checkov analysis failed" >> $GITHUB_STEP_SUMMARY
+          echo "❌ IaC scan failed or no results generated" >> $GITHUB_STEP_SUMMARY
         fi
 
-  compliance-check:
+  ai-security-report:
     runs-on: ubuntu-latest
-    needs: [security-scan, dependency-check, terraform-security]
+    needs: [trivy-security-scan, trivy-iac-scan]
     if: always()
     
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v3
 
-    - name: Download Trivy results
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Download Trivy FS results
       uses: actions/download-artifact@v4
       with:
-        name: trivy-results
+        name: trivy-fs-results
         path: .
 
     - name: Download Trivy IaC results
@@ -201,49 +123,36 @@ jobs:
         name: trivy-iac-results
         path: .
 
-    - name: Download Safety results
-      uses: actions/download-artifact@v4
-      with:
-        name: safety-results
-        path: .
-
-    - name: Download Bandit results
-      uses: actions/download-artifact@v4
-      with:
-        name: bandit-results
-        path: .
-
-    - name: Download Checkov results
-      uses: actions/download-artifact@v4
-      with:
-        name: checkov-results
-        path: .
-
-    - name: Generate Dynamic Security Report
+    - name: Generate AI Security Report
       run: |
-        pip install -r requirements.txt
         python3 generate_security_report.py
 
-    - name: Upload Security Report
+    - name: Upload AI Security Report
       uses: actions/upload-artifact@v4
       with:
-        name: security-report
-        path: security-report.md
+        name: trivy-ai-security-report
+        path: trivy-security-report.md
 
-    - name: Comment on PR
+    - name: Comment on PR with AI Report
       if: github.event_name == 'pull_request'
       uses: actions/github-script@v6
       with:
         script: |
           const fs = require('fs');
-          const report = fs.readFileSync('security-report.md', 'utf8');
+          let report = '';
+          
+          try {
+            report = fs.readFileSync('trivy-security-report.md', 'utf8');
+          } catch (error) {
+            report = '## 🤖 AI Security Report\n\n❌ Report generation failed. Please check the workflow logs for details.';
+          }
           
           // Check if all jobs succeeded
           const allJobsSucceeded = context.payload.workflow_run?.conclusion === 'success';
           const status = allJobsSucceeded ? '✅' : '❌';
           const statusText = allJobsSucceeded ? 'PASSED' : 'FAILED';
           
-          const comment = `${status} **Security Scan ${statusText}**\n\n${report}`;
+          const comment = `${status} **Trivy AI Security Scan ${statusText}**\n\n${report}`;
           
           github.rest.issues.createComment({
             issue_number: context.issue.number,
@@ -252,17 +161,17 @@ jobs:
             body: comment
           });
 
-    - name: Generate Final Summary
+    - name: Generate Final AI Summary
       run: |
-        echo "## 🛡️ Security Scan Complete" >> $GITHUB_STEP_SUMMARY
-        echo "### Overall Status: ${{ needs.security-scan.result == 'success' && needs.dependency-check.result == 'success' && needs.terraform-security.result == 'success' && '✅ PASSED' || '❌ FAILED' }}" >> $GITHUB_STEP_SUMMARY
+        echo "## 🤖 AI Security Scan Complete" >> $GITHUB_STEP_SUMMARY
+        echo "### Overall Status: ${{ needs.trivy-security-scan.result == 'success' && needs.trivy-iac-scan.result == 'success' && '✅ PASSED' || '❌ FAILED' }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📋 Job Results:" >> $GITHUB_STEP_SUMMARY
-        echo "- Security Scan: ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY
-        echo "- Dependency Check: ${{ needs.dependency-check.result }}" >> $GITHUB_STEP_SUMMARY
-        echo "- Terraform Security: ${{ needs.terraform-security.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Trivy File System Scan: ${{ needs.trivy-security-scan.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- Trivy IaC Scan: ${{ needs.trivy-iac-scan.result }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📊 Reports Available:" >> $GITHUB_STEP_SUMMARY
+        echo "- 🤖 AI Security Report (trivy-security-report.md)" >> $GITHUB_STEP_SUMMARY
         echo "- GitHub Security Tab" >> $GITHUB_STEP_SUMMARY
         echo "- Workflow Artifacts" >> $GITHUB_STEP_SUMMARY
         echo "- Pull Request Comments (if applicable)" >> $GITHUB_STEP_SUMMARY 

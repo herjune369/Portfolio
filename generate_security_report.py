@@ -37,7 +37,7 @@ def parse_sarif_file(file_path: str) -> Dict:
         return {
             "total_vulnerabilities": len(results),
             "severity_distribution": severity_counts,
-            "top_vulnerabilities": results[:5] if results else []
+            "all_vulnerabilities": results  # 모든 취약점 포함
         }
     except Exception as e:
         return {"error": f"SARIF 파일 파싱 실패: {str(e)}"}
@@ -99,11 +99,6 @@ def generate_ai_report(trivy_fs_results: Dict, trivy_iac_results: Dict) -> str:
         report += f"- **상태**: ✅ 완료\n"
         report += f"- **발견된 취약점**: {vulns}개\n"
         report += f"- **심각도 분포**: 높음: {severity_dist.get('error', 0)}, 중간: {severity_dist.get('warning', 0)}, 낮음: {severity_dist.get('note', 0)}\n"
-        
-        if trivy_fs_results.get("top_vulnerabilities"):
-            report += "- **주요 취약점**:\n"
-            for vuln in trivy_fs_results["top_vulnerabilities"][:3]:
-                report += f"  - {vuln['message'][:80]}...\n"
     
     report += "\n#### 🏗️ Trivy 인프라스트럭처 코드 스캔\n"
     
@@ -115,11 +110,6 @@ def generate_ai_report(trivy_fs_results: Dict, trivy_iac_results: Dict) -> str:
         report += f"- **상태**: ✅ 완료\n"
         report += f"- **발견된 취약점**: {vulns}개\n"
         report += f"- **심각도 분포**: 높음: {severity_dist.get('error', 0)}, 중간: {severity_dist.get('warning', 0)}, 낮음: {severity_dist.get('note', 0)}\n"
-        
-        if trivy_iac_results.get("top_vulnerabilities"):
-            report += "- **주요 취약점**:\n"
-            for vuln in trivy_iac_results["top_vulnerabilities"][:3]:
-                report += f"  - {vuln['message'][:80]}...\n"
     
     # AI 분석 결과 추가
     report += f"\n## 🤖 AI 보안 분석\n\n{ai_analysis}\n"
@@ -164,31 +154,41 @@ def generate_ai_analysis(high_count: int, medium_count: int, low_count: int,
         analysis += "### 🟡 보안 상태: 주의\n"
         analysis += f"**{medium_count}개의 중간 심각도 취약점**이 발견되어 우선순위를 정해 해결해야 합니다.\n\n"
     
-    # 파일 시스템 스캔 분석
+    # 파일 시스템 스캔 분석 - 모든 취약점 포함
     if "error" not in trivy_fs and trivy_fs.get("total_vulnerabilities", 0) > 0:
         analysis += "### 📁 파일 시스템 취약점 분석\n"
-        fs_vulns = trivy_fs.get("top_vulnerabilities", [])
+        fs_vulns = trivy_fs.get("all_vulnerabilities", [])
         if fs_vulns:
-            analysis += "**주요 발견사항**:\n"
-            for i, vuln in enumerate(fs_vulns[:3], 1):
-                analysis += f"{i}. **{vuln['severity'].upper()}**: {vuln['message'][:100]}...\n"
-            analysis += "\n**권장사항**:\n"
+            analysis += f"**발견된 모든 취약점 ({len(fs_vulns)}개)**:\n"
+            for i, vuln in enumerate(fs_vulns, 1):
+                severity_emoji = "🔴" if vuln['severity'] == 'error' else "🟡" if vuln['severity'] == 'warning' else "🟢"
+                analysis += f"{i}. {severity_emoji} **{vuln['severity'].upper()}**: {vuln['message']}\n"
+                analysis += f"   - **위치**: {vuln['location']}\n"
+                analysis += f"   - **규칙 ID**: {vuln['rule_id']}\n\n"
+            
+            analysis += "**권장사항**:\n"
             analysis += "- 의존성 패키지를 최신 버전으로 업데이트\n"
             analysis += "- 알려진 취약점이 있는 라이브러리 교체 검토\n"
-            analysis += "- 정기적인 보안 업데이트 일정 수립\n\n"
+            analysis += "- 정기적인 보안 업데이트 일정 수립\n"
+            analysis += "- 패키지 관리 정책 수립 및 적용\n\n"
     
-    # IaC 스캔 분석
+    # IaC 스캔 분석 - 모든 취약점 포함
     if "error" not in trivy_iac and trivy_iac.get("total_vulnerabilities", 0) > 0:
         analysis += "### 🏗️ 인프라스트럭처 코드 취약점 분석\n"
-        iac_vulns = trivy_iac.get("top_vulnerabilities", [])
+        iac_vulns = trivy_iac.get("all_vulnerabilities", [])
         if iac_vulns:
-            analysis += "**주요 발견사항**:\n"
-            for i, vuln in enumerate(iac_vulns[:3], 1):
-                analysis += f"{i}. **{vuln['severity'].upper()}**: {vuln['message'][:100]}...\n"
-            analysis += "\n**권장사항**:\n"
+            analysis += f"**발견된 모든 취약점 ({len(iac_vulns)}개)**:\n"
+            for i, vuln in enumerate(iac_vulns, 1):
+                severity_emoji = "🔴" if vuln['severity'] == 'error' else "🟡" if vuln['severity'] == 'warning' else "🟢"
+                analysis += f"{i}. {severity_emoji} **{vuln['severity'].upper()}**: {vuln['message']}\n"
+                analysis += f"   - **위치**: {vuln['location']}\n"
+                analysis += f"   - **규칙 ID**: {vuln['rule_id']}\n\n"
+            
+            analysis += "**권장사항**:\n"
             analysis += "- Terraform 설정에서 보안 모범 사례 적용\n"
             analysis += "- 민감한 정보가 하드코딩되지 않도록 확인\n"
-            analysis += "- 최소 권한 원칙에 따른 리소스 접근 권한 설정\n\n"
+            analysis += "- 최소 권한 원칙에 따른 리소스 접근 권한 설정\n"
+            analysis += "- 인프라 코드 리뷰 프로세스 강화\n\n"
     
     # 일반적인 보안 권장사항
     analysis += "### 🛡️ 일반 보안 권장사항\n"
@@ -199,6 +199,7 @@ def generate_ai_analysis(high_count: int, medium_count: int, low_count: int,
     analysis += "3. **정기 모니터링**: 자동화된 보안 스캔을 통한 지속적 모니터링\n"
     analysis += "4. **팀 교육**: 보안 모범 사례에 대한 팀원 교육\n"
     analysis += "5. **문서화**: 보안 정책 및 절차 문서화\n"
+    analysis += "6. **자동화**: CI/CD 파이프라인에 보안 검사 통합\n"
     
     return analysis
 
