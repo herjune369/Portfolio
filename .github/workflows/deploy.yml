@@ -1,0 +1,102 @@
+name: Deploy or Destroy AI Saju App
+
+on:
+  push:
+    branches:
+      - main
+      - destroy
+  workflow_run:
+    workflows: ["Security Scan with Trivy"]
+    types:
+      - completed
+    branches:
+      - main
+
+env:
+  AWS_REGION: 'ap-northeast-2'
+  TF_VERSION: '1.5.0'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' || github.ref == 'refs/heads/destroy'
+
+    steps:
+    - name: Checkout Repo
+      uses: actions/checkout@v3
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Terraform Init
+      run: |
+        cd terraform
+        terraform init \
+          -backend-config="bucket=${{ secrets.TF_BUCKET }}" \
+          -backend-config="key=ai-saju-app/terraform.tfstate" \
+          -backend-config="region=${{ env.AWS_REGION }}" \
+          -backend-config="dynamodb_table=${{ secrets.TF_LOCK_TABLE }}"
+
+    - name: Terraform Apply or Destroy
+      id: tf
+      run: |
+        cd terraform
+
+        SUBNET_IDS="${{ secrets.ALL_SUBNET_IDS }}"
+        SUBNET_JSON=$(echo $SUBNET_IDS | awk -F',' '{for(i=1;i<=NF;i++) printf "\"%s\"%s", $i, (i<NF?",":"") }')
+
+        if [[ "${{ github.ref }}" == "refs/heads/destroy" ]]; then
+          terraform destroy -auto-approve \
+            -var="subnet_ids=[${SUBNET_JSON}]" \
+            -var="vpc_id=${{ secrets.VPC_ID }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="ami_id=${{ secrets.AMI_ID }}" \
+            -var="public_key=${{ secrets.TF_PUBLIC_KEY }}"
+        else
+          terraform apply -auto-approve \
+            -var="subnet_ids=[${SUBNET_JSON}]" \
+            -var="vpc_id=${{ secrets.VPC_ID }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="ami_id=${{ secrets.AMI_ID }}" \
+            -var="public_key=${{ secrets.TF_PUBLIC_KEY }}"
+
+          terraform output -json > ../ansible/terraform_outputs.json
+        fi
+
+    - name: Install Ansible and jq
+      if: github.ref == 'refs/heads/main'
+      run: |
+        sudo apt update
+        sudo apt install -y ansible jq
+
+    - name: Set up SSH key
+      if: github.ref == 'refs/heads/main'
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/my-key.pem
+        chmod 600 ~/.ssh/my-key.pem
+        eval "$(ssh-agent -s)"
+        ssh-add ~/.ssh/my-key.pem
+
+    - name: Generate inventory.ini
+      if: github.ref == 'refs/heads/main'
+      working-directory: ./ansible
+      run: |
+        echo "[web]" > inventories/inventory.ini
+        jq -r '.ec2_public_ips.value[] | "\(. ) ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/my-key.pem"' terraform_outputs.json >> inventories/inventory.ini
+        cat inventories/inventory.ini
+
+    - name: Run Ansible Playbook
+      if: github.ref == 'refs/heads/main'
+      working-directory: ./ansible
+      run: |
+        ansible-playbook -i inventories/inventory.ini playbook.yml -e 'ansible_ssh_common_args="-o StrictHostKeyChecking=no"'

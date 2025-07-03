@@ -1,0 +1,59 @@
+- name: Deploy Flask App with RDS connection
+  hosts: web
+  become: true
+  pre_tasks:
+    - name: Get latest terraform outputs
+      local_action: shell cd ../terraform && terraform output -json
+      register: terraform_output
+      
+    - name: Save terraform outputs to file
+      local_action: copy content="{{ terraform_output.stdout }}" dest="terraform_outputs.json"
+      
+    - name: Load terraform outputs
+      ansible.builtin.set_fact:
+        terraform_outputs: "{{ lookup('file', 'terraform_outputs.json') | from_json }}"
+  vars:
+    rds_endpoint: "{{ terraform_outputs.rds_endpoint.value }}"
+    alb_dns_name: "{{ terraform_outputs.alb_dns_name.value }}"
+    db_password: "sajupass"  # 실제 운영환경에서는 vault를 사용해야 합니다
+  roles:
+    - flask
+  tasks:
+    - name: Initialize database
+      shell: |
+        mysql -h {{ rds_endpoint }} -u admin -p'{{ db_password }}' < /home/ubuntu/myapp/init_db.sql
+      ignore_errors: true
+
+- name: Test ALB access
+  hosts: localhost
+  gather_facts: false
+  pre_tasks:
+    - name: Get latest terraform outputs
+      shell: cd ../terraform && terraform output -json
+      register: terraform_output
+      
+    - name: Save terraform outputs to file
+      copy:
+        content: "{{ terraform_output.stdout }}"
+        dest: "terraform_outputs.json"
+      
+    - name: Load terraform outputs
+      ansible.builtin.set_fact:
+        terraform_outputs: "{{ lookup('file', 'terraform_outputs.json') | from_json }}"
+  vars:
+    alb_dns_name: "{{ terraform_outputs.alb_dns_name.value }}"
+  tasks:
+    - name: Wait for Flask app to respond via ALB
+      uri:
+        url: "http://{{ alb_dns_name }}/"
+        method: GET
+        return_content: yes
+        status_code: 200
+      register: alb_response
+      retries: 10
+      delay: 5
+      until: alb_response.status == 200
+
+    - name: Show ALB response
+      debug:
+        var: alb_response.content 

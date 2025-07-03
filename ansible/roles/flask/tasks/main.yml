@@ -1,0 +1,88 @@
+---
+- name: Install system packages
+  apt:
+    name:
+      - python3-pip
+      - python3-venv
+      - mysql-client
+    update_cache: yes
+  become: true
+
+- name: Create Flask app directory
+  file:
+    path: /home/ubuntu/myapp
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Set up Python virtual environment
+  command: python3 -m venv /home/ubuntu/myapp/venv
+  args:
+    creates: /home/ubuntu/myapp/venv
+  become: true
+
+- name: Create requirements.txt
+  copy:
+    dest: /home/ubuntu/myapp/requirements.txt
+    content: |
+      flask<3
+      requests
+      pymysql
+      python-dotenv
+    owner: ubuntu
+    group: ubuntu
+    mode: '0644'
+
+- name: Install python-dotenv
+  pip:
+    name: python-dotenv
+    virtualenv: /home/ubuntu/myapp/venv
+
+- name: Install pip packages in venv
+  pip:
+    requirements: /home/ubuntu/myapp/requirements.txt
+    virtualenv: /home/ubuntu/myapp/venv
+    virtualenv_command: python3 -m venv
+  become: true
+
+- name: Copy SQL initialization script
+  copy:
+    src: init_db.sql
+    dest: /home/ubuntu/myapp/init_db.sql
+    owner: ubuntu
+    group: ubuntu
+    mode: '0644'
+
+- name: Initialize database
+  shell: |
+    mysql -h {{ rds_endpoint }} -u admin -p'{{ db_password }}' < /home/ubuntu/myapp/init_db.sql
+  ignore_errors: true
+
+- name: Create environment file for Flask (.env)
+  template:
+    src: .env.j2
+    dest: /home/ubuntu/myapp/.env
+    owner: ubuntu
+    group: ubuntu
+    mode: '0600'
+
+- name: Copy Flask app.py
+  copy:
+    src: app.py
+    dest: /home/ubuntu/myapp/app.py
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+
+- name: Kill existing Flask app if running
+  shell: "pkill -f app.py"
+  ignore_errors: true
+
+- name: Start Flask app with nohup
+  shell: |
+    source /home/ubuntu/myapp/venv/bin/activate
+    nohup python /home/ubuntu/myapp/app.py > /home/ubuntu/myapp/flask.log 2>&1 &
+  args:
+    executable: /bin/bash
+  become: true

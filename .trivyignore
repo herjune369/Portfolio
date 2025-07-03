@@ -1,0 +1,51 @@
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Terraform lock files
+.terraform.lock.hcl
+
+# Ansible temporary files
+*.retry
+
+# Log files
+*.log
+
+# Environment files
+.env
+.env.*
+
+# SSH keys
+*.pem
+*.key
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Git files
+.git/
+.gitignore
+
+# Node modules (if any)
+node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Terraform directories
+.terraform/ 
